@@ -1,0 +1,75 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: sample-db
+    environment:
+      POSTGRES_DB: sample_db
+      POSTGRES_USER: sample_user
+      POSTGRES_PASSWORD: sample_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql:ro,Z
+    ports:
+      - "6432:6432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sample_user -d sample_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sample-network
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sample-api
+    env_file:
+      - .env
+    ports:
+      - "9000:9000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app:Z
+    networks:
+      - sample-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: sample-redis
+    ports:
+      - "5379:5379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - sample-network
+    restart: unless-stopped
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: sample-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@sample.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "6060:90"
+    depends_on:
+      - db
+    networks:
+      - sample-network
+    profiles:
+      - dev
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  sample-network:
+    driver: bridge
